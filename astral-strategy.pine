@@ -1,0 +1,205 @@
+
+//@version=5
+indicator('Astral Strategy.', overlay=true, max_lines_count=500, max_labels_count=500)
+// Dropdown input for selecting currency pair
+currencyPair = input.string(defval="GBPJPY", title="Currency Pair", options=["GBPJPY", "EURUSD"])
+
+// Define FVG condition values for different currency pairs
+fvgCondition = currencyPair == "GBPJPY" ? 0.018 : 0.00003
+
+// Display settings
+showW = input.bool(true, title="Show Entry Signals", group="Display Settings") 
+showE  = input.bool(true, title="Show Entry Signals", group="Display Settings")
+s1Col  = input.color(color.green,"Long Signal Color", inline="3", group="Display Settings")
+s2Col  = input.color(color.red,"Short Signal Color", inline="3", group="Display Settings")
+showAL = input.bool(true, title="Show Liquidity Levels", group="Display Settings")
+l1Col  = input.color(color.red,"Bottom Liquidity Level Color", inline="4", group="Display Settings")
+l2Col  = input.color(color.blue,"Top Liquidity Level Color", inline="4", group="Display Settings")
+l1W    = input(1, "Top Liquidity Level Width", group="Display Settings")
+l2W    = input(1, "Bottom Liquidity Level Width", group="Display Settings")
+showL  = input.bool(true, title="Show Liquidity Sweep", group="Display Settings")
+ls1Col  = input.color(color.green,"Bottom Liquidity Sweep Color", inline="5", group="Display Settings")
+ls2Col  = input.color(color.red,"Top Liquidity Sweep Color", inline="5", group="Display Settings")
+
+//AS Liquidity Zones
+asianSessionStartHour = 23
+asianSessionEndHour = 8
+asianSessionEndHour2 = 9
+tradeStartHour = 8
+tradeEndHour = 9
+tradeStartHour2 = 8
+tradeEndHour2 = 9
+
+var float asianHigh = na
+var float asianLow = na
+
+if hour(time, 'GMT+1') == asianSessionStartHour and minute(time, 'GMT+1') == 0
+    asianHigh := high
+    asianLow := low
+else if (hour(time, 'GMT+1') > asianSessionStartHour) 
+     or (hour(time, 'GMT+1') < asianSessionEndHour)
+    asianHigh := math.max(asianHigh, high)
+    asianLow := math.min(asianLow, low)
+
+lookBackCandles = 48
+otherHighs = ta.highest(high, lookBackCandles)
+otherLows = ta.lowest(low, lookBackCandles)
+
+if hour(time, 'GMT+1') == asianSessionEndHour and minute(time, 'GMT+1') == 0 and showAL
+    line.new(x1=bar_index - 1, y1=asianHigh, x2=bar_index+120, 
+     y2=asianHigh, color=l2Col, width=l1W)
+    line.new(x1=bar_index - 1, y1=asianLow, x2=bar_index+120, 
+     y2=asianLow, color=l1Col, width=l2W)
+
+
+llq = hour(time, 'GMT+1') >= tradeStartHour and hour(time, 'GMT+1') < tradeEndHour and (low <= asianLow and high < asianHigh)
+hlq = hour(time, 'GMT+1') >= tradeStartHour and hour(time, 'GMT+1') < tradeEndHour and(high >= asianHigh and low > asianLow)
+
+plotshape(showL?llq and not llq[1]:na, "Low Liquidity Sweep", shape.triangleup, location.belowbar, ls1Col, size=size.small)
+plotshape(showL?hlq and not hlq[1]:na, "High Liquidity Sweep", shape.triangledown, location.abovebar, ls2Col, size=size.small)
+
+//FVG     
+FVG = input.bool(true ,'Show FVGs',group = 'FVG Settings') 
+BULLfvgc = input.color(#f2ff00,'FVG Color : ',group = 'FVG Settings',inline = '1')
+BEARfvgc = input.color(#f079d2,'<-- BullFVG | BearFVG --> ',group = 'FVG Settings',inline = '1')
+TT = input.bool(true, 'FVG ToolTips?',group = 'FVG Settings')
+bC = input.bool(true ,'Remove Bar Color?',group = 'FVG Settings') 
+UTC = -5
+UTC := UTC * 3600000
+
+fTime = '\nTime : ' + str.format("{0,date," + 'hh:mm a' + "}", time[1] + UTC)
+
+BearFVG = high < low[2] and FVG and (low[2] - high) > fvgCondition
+BullFVG = low > high[2] and FVG and (low - high[2]) > fvgCondition
+FVGc = BullFVG ? BULLfvgc : BEARfvgc
+
+var label Label = na
+bool BearFVGp = false
+bool BullFVGp = false
+
+if BearFVG
+    Label := TT ? label.new(
+     x = time[1], 
+     y = math.avg(high,low[2]),
+     text = '     ',
+     xloc = xloc.bar_time,
+     color = color(na),
+     style = label.style_label_center,
+     size = size.large,
+     tooltip =  
+     'Bear FVG\n---------------------' + 
+     '\nSize : '   + str.tostring(low[2] - high) +
+     '\nTop : '    + str.tostring(low[2]) +
+     '\nMiddle : ' + str.tostring(math.avg(low[2],high)) +
+     '\nBottom : ' + str.tostring(high) + fTime) : na
+    BearFVGp := true
+if BearFVGp == true and BearFVGp[1] == true 
+    BearFVGp := false
+
+if BullFVG
+    Label := TT ? label.new(
+     x = time[1], 
+     y = math.avg(high[2],low),
+     text = '     ',
+     xloc = xloc.bar_time,
+     color = color(na),
+     style = label.style_label_center,
+     size = size.large,
+     tooltip =  
+     'Bull FVG\n---------------------' + 
+     '\nSize : '   + str.tostring(low - high[2]) +
+     '\nTop : '    + str.tostring(low) +
+     '\nMiddle : ' + str.tostring(math.avg(high[2],low)) +
+     '\nBottom : ' + str.tostring(high[2]) + fTime) : na
+    BullFVGp := true
+if BullFVGp == true and BullFVGp[1] == true
+    BullFVGp := false
+    
+bool BullGO1 = BullFVG and BullFVGp
+bool BearGO1 = BearFVG and BearFVGp
+bool BullGO2 = BullFVG and BullGO1 == false
+bool BearGO2 = BearFVG and BearGO1 == false
+    
+p1 = plot(FVG ? 
+ BearGO1 ? low[2] : BullGO1 ? low : na : na,
+ style = plot.style_stepline,
+ offset=-1,display = display.none,
+ editable = false)
+p2 = plot(FVG ? 
+ BearGO1 ? high : BullGO1 ? high[2] : na : na,
+ style = plot.style_stepline,
+ offset=-1, display = display.none,
+ editable = false)
+fill(p1,p2,color = FVGc[1],editable = false)
+
+p3 = plot(FVG ? 
+ BearGO2 ? low[2] : BullGO2 ? low : na : na,
+ style = plot.style_stepline,
+ offset=-1,display = display.none,
+ editable = false)
+p4 = plot(FVG ? 
+ BearGO2 ? high : BullGO2 ? high[2] : na : na,
+ style = plot.style_stepline,
+ offset=-1, display = display.none,
+ editable = false) 
+fill(p3,p4,color = FVGc[1],editable = false)
+
+barcolor(color = bC and (BullFVG or BearFVG) ? color.new(color.white,100) : na, offset = -1, editable = false)
+
+//SIGNALS
+bullfvgc = BullFVG and FVG
+bearfvgc = BearFVG and FVG
+var bullFVGCounter = 0
+var bearFVGCounter = 0
+var bullFVGtop = 0.0
+var bullFVGbottom = 0.0
+var bearFVGtop = 0.0
+var bearFVGbottom = 0.0
+
+var liquidityGrabBull = false
+var liquidityGrabBear = false
+
+var fvgDetectedBull = false
+var fvgDetectedBear = false
+
+if hour(time, 'GMT+1') >= tradeStartHour 
+     and hour(time, 'GMT+1') < tradeEndHour
+    if low <= asianLow and high < asianHigh
+        liquidityGrabBull := true
+    if high >= asianHigh and low > asianLow
+        liquidityGrabBear := true
+
+if liquidityGrabBull and bullfvgc
+    fvgDetectedBull := true
+    bullFVGtop := low
+    bullFVGbottom := high[2]
+
+if liquidityGrabBear and bearfvgc
+    fvgDetectedBear := true
+    bearFVGtop := low[2]
+    bearFVGbottom := high
+
+longSignal = fvgDetectedBull and low < bullFVGtop 
+shortSignal = fvgDetectedBear and high > bearFVGbottom
+
+isSignalTime = hour(time, 'GMT+1') >= tradeStartHour2 
+ and hour(time, 'GMT+1') < tradeEndHour2
+
+plotshape(showE?(longSignal and not longSignal[1]) and isSignalTime and close<asianHigh:na, title='LONG FVG', 
+ style=shape.labelup, color=s1Col, location=location.belowbar, 
+  size=size.tiny, text='L', textcolor=color.black)
+plotshape(showE?(shortSignal and not shortSignal[1]) and isSignalTime and close>asianLow:na, title='SHORT FVG', 
+ style=shape.labeldown, color=s2Col, location=location.abovebar, 
+  size=size.tiny, text='S', textcolor=color.black)
+
+if longSignal
+    liquidityGrabBear := false
+    fvgDetectedBull := false
+
+if not isSignalTime
+    liquidityGrabBull := false
+    liquidityGrabBear := false
+
+if shortSignal
+    liquidityGrabBull := false
+    fvgDetectedBear := false
