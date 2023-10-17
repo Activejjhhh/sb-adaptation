@@ -203,3 +203,106 @@ if not isSignalTime
 if shortSignal
     liquidityGrabBull := false
     fvgDetectedBear := false
+
+//MSS/CHOCH
+//------------------------------------------------------------------------------
+// Settings
+//-----------------------------------------------------------------------------{
+showMss = input.bool(true, title="Show MSS", group="MSS")
+length = input.int(5, minval = 3, group = "MSS")
+
+//Colors
+bullCss = input.color(#089981, 'Bull Color', group = "MSS")
+bearCss = input.color(#f23645, 'Bear Color', group = "MSS")
+ 
+//-----------------------------------------------------------------------------}
+//Types
+//-----------------------------------------------------------------------------{
+type fractal
+    float value
+    int loc
+    bool iscrossed
+ 
+//-----------------------------------------------------------------------------}
+//Fractal Detection
+//-----------------------------------------------------------------------------{
+var p = int(length/2)
+n = bar_index
+ 
+dh = math.sum(math.sign(high - high[1]), p)
+dl = math.sum(math.sign(low - low[1]), p)
+ 
+bullf = dh == -p and dh[p] == p and high[p] == ta.highest(length)
+bearf = dl == p and dl[p] == -p and low[p] == ta.lowest(length)
+ 
+bullf_count = ta.cum(bullf ? 1 : 0)
+bearf_count = ta.cum(bearf ? 1 : 0)
+ 
+//-----------------------------------------------------------------------------}
+//Bullish market structure
+//-----------------------------------------------------------------------------{
+var upper = fractal.new()
+var label ms_lbl = na
+var bull_ms_count = 0
+var os = 0
+ 
+if bullf
+    upper.value := high[p]
+    upper.loc := n-p
+    upper.iscrossed := false
+ 
+if ta.crossover(close, upper.value) and not upper.iscrossed and isSignalTime
+    if os == -1 and showMss
+        line.new(upper.loc, upper.value, n, upper.value, color = bullCss)
+        ms_lbl := label.new(int(math.avg(n, upper.loc)), upper.value, 'mss'
+          , color = color(na)
+          , textcolor = bullCss
+          , style = label.style_label_down
+          , size = size.tiny)
+ 
+    upper.iscrossed := true
+    bull_ms_count += 1
+    os := 1
+ 
+//-----------------------------------------------------------------------------}
+//Bearish market structure
+//-----------------------------------------------------------------------------{
+var lower = fractal.new()
+var bear_ms_count = 0
+ 
+if bearf
+    lower.value := low[p]
+    lower.loc := n-p
+    lower.iscrossed := false
+ 
+if ta.crossunder(close, lower.value) and not lower.iscrossed and isSignalTime
+    if os == 1 and showMss
+        line.new(lower.loc, lower.value, n, lower.value, color = bearCss)
+        label.new(int(math.avg(n, lower.loc)), lower.value, 'mss'
+          , color = color(na)
+          , textcolor = bearCss
+          , style = label.style_label_up
+          , size = size.tiny)
+ 
+    lower.iscrossed := true
+    bear_ms_count += 1
+    os := -1
+
+//DASHBOARD
+showDb = input.bool(true, title="Show Dashboard", group="Dashboard")
+tablepos = input.string(position.top_right, "Position", 
+ options=[position.top_right, position.top_left, position.bottom_right, position.bottom_left], group="Dashboard")
+tablesize = input.string(size.normal, "Size", 
+ options=[size.normal, size.small, size.large], group="Dashboard")
+var color backgroundColor = color.new(color.blue, 90)
+var color textColor = color.white
+if showDb
+    var table checklistTable = table.new(position = tablepos, columns = 1, rows = 6, bgcolor = backgroundColor)
+    table.cell(table_id = checklistTable, column = 0, row = 0, text = "SamFx's 8AM-9AM Strat", text_color=textColor, text_size = tablesize)
+    table.cell(table_id = checklistTable, column = 0, row = 1, text = "☐ On the 15M timeframe, gauge overall bias & locate major points of interest.", text_color=textColor, bgcolor=color.new(color.silver, 90), text_size = tablesize)
+    table.cell(table_id = checklistTable, column = 0, row = 2, text = "☐ When price sweeps a point of interest, drop down to the 1M timeframe.", text_color=textColor, text_size = tablesize)
+    table.cell(table_id = checklistTable, column = 0, row = 3, text = "☐ Wait patiently for price to create an MSS.", text_color=textColor, bgcolor=color.new(color.silver, 90), text_size = tablesize)
+    table.cell(table_id = checklistTable, column = 0, row = 4, text = "☐ Wait for price to create a FVG & create imbalance.", text_color=textColor, text_size = tablesize)
+    table.cell(table_id = checklistTable, column = 0, row = 5, text = "☐ Enter at the re entry of a FVG.", text_color=textColor, bgcolor=color.new(color.silver, 90), text_size = tablesize)
+
+ 
